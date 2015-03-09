@@ -1,0 +1,4 @@
+PWM driver for Cadence Triple Timer Counter (TTC) IPs, as found on Xilinx Zynq SoCs
+
+Author: Berke Durak <obd@xiphos.com>
+Copyright (C) 2015 Xiphos Systems Corporation

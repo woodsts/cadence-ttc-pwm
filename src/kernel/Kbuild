@@ -1,0 +1,2 @@
+obj-m := pwm-cadence.o
+pwm-cadence-y := pwm-cadence.o
