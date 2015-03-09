@@ -6,3 +6,4 @@
 Makefile
 Module.symvers
 modules.order
+!Makefile.in

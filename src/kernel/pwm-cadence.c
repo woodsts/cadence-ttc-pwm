@@ -20,6 +20,7 @@ struct cadence_pwm {
 
 static int cadence_pwm_probe(struct platform_device *pdev)
 {
+	return -1;
 }
 
 static int cadence_pwm_remove(struct platform_device *pdev)

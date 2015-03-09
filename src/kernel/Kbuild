@@ -1,2 +1,2 @@
-obj-m := pwm-cadence.o
-pwm-cadence-y := pwm-cadence.o
+obj-m := mod_pwm_cadence.o
+mod_pwm_cadence-y := pwm-cadence.o
