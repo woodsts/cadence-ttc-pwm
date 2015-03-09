@@ -1,0 +1,40 @@
+invoke=$(MAKE) M=$(PWD) -C @KERNEL_PATH@ \
+		ARCH=@KERNEL_ARCH@ \
+		CROSS_COMPILE=@KERNEL_CROSS_COMPILE@
+targets=mod_pwm-cadence.ko
+
+.PHONY: all
+all: $(targets)
+
+mod_pwm-cadence_SOURCES = pwm-cadence.c
+
+mod_pwm-cadence.ko: $(mod_pwm-cadence_SOURCES)
+	$(invoke)
+
+.PHONY: install
+install: mod_pwm-cadence.ko
+	install -d $(DESTDIR)/lib/modules/extra
+	install mod_pwm-cadence.ko $(DESTDIR)/lib/modules/extra/mod_pwm-cadence.ko
+
+.PHONY: install-data
+install-data:
+
+.PHONY: distdir
+distdir:
+	-cp $(mod_pwm-cadence_SOURCES) $(distdir)
+
+.PHONY: install-exec
+install-exec:
+
+.PHONY: uninstall
+uninstall:
+
+.PHONY: uninstall mostlyclean distclean maintainer-clean
+clean mostlyclean distclean maintainer-clean:
+	$(invoke) clean
+
+EMPTY_AUTOMAKE_TARGETS = install-dvi install-html install-info install-ps \
+			 install-pdf dvi pdf ps info html tags ctags \
+			 check installcheck
+.PHONY: $(EMPTY_AUTOMAKE_TARGETS)
+$(EMPTY_AUTOMAKE_TARGETS):
