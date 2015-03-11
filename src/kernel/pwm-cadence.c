@@ -143,9 +143,6 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL,
 		counter_ctrl | CPWM_COUNTER_CTRL_COUNTING_DISABLE);
 
-	/* Reset counter */
-	cpwm_write(cpwm, h, CPWM_COUNTER_VALUE, 0);
-
 	/* Calculate period, prescaler and set clock control register */
 	period_clocks =
 		div64_u64(
@@ -159,10 +156,12 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 
 	if (!prescaler)
 		x &= ~(CPWM_CLK_PRESCALE_ENABLE | CPWM_CLK_PRESCALE_MASK);
-	else
+	else {
+		x &= ~CPWM_CLK_PRESCALE_MASK;
 		x |= CPWM_CLK_PRESCALE_ENABLE |
 			(((prescaler - 1) << CPWM_CLK_PRESCALE_SHIFT) &
 			CPWM_CLK_PRESCALE_MASK);
+	};
 
 	if (cpwm->pwms[h].source) x |= CPWM_CLK_SRC_EXTERNAL;
 	else x &= ~CPWM_CLK_SRC_EXTERNAL;
@@ -181,6 +180,13 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 		(duty_clocks >> prescaler) & 0xffff);
 
 	/* Restore counter */
+	counter_ctrl &=
+		~CPWM_COUNTER_CTRL_DECREMENT_ENABLE;
+	counter_ctrl |=
+		CPWM_COUNTER_CTRL_INTERVAL_ENABLE |
+		CPWM_COUNTER_CTRL_RESET |
+		CPWM_COUNTER_CTRL_MATCH_ENABLE |
+		CPWM_COUNTER_CTRL_WAVE_POL;
 	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL, counter_ctrl);
 
 	printk(KERN_INFO DRIVER_NAME ": %d/%d clocks, prescaler 2^%d\n",
@@ -213,10 +219,8 @@ static int cadence_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 	x = cpwm_read(cpwm, h, CPWM_COUNTER_CTRL);
 	x &= ~(CPWM_COUNTER_CTRL_COUNTING_DISABLE |
-		CPWM_COUNTER_CTRL_DECREMENT_ENABLE |
 		CPWM_COUNTER_CTRL_WAVE_DISABLE);
-	x |= CPWM_COUNTER_CTRL_INTERVAL_ENABLE | CPWM_COUNTER_CTRL_RESET |
-		CPWM_COUNTER_CTRL_MATCH_ENABLE | CPWM_COUNTER_CTRL_WAVE_POL;
+	x |= CPWM_COUNTER_CTRL_RESET;
 	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL, x);
 	return 0;
 }
