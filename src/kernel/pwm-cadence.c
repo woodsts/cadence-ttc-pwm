@@ -12,6 +12,7 @@
  *
  * References:
  *   [UG585] Zynq-7000 All Programmable SoC Technical Reference Manual, Xilinx
+ *   [ttcps_v2_0] Xilinx bare-metal library source code
  */
 
 #include <linux/module.h>
@@ -26,17 +27,31 @@
 /* Register description (from section 8.5) */
 
 enum cpwm_register {
-	CPWM_CLK_CTRL = 0,
-	CPWM_COUNTER_CTRL = 1,
-	CPWM_COUNTER_VALUE = 2,
-	CPWM_INTERVAL_COUNTER = 3,
-	CPWM_MATCH_1_COUNTER = 4,
-	CPWM_MATCH_2_COUNTER = 5,
-	CPWM_MATCH_3_COUNTER = 6,
-	CPWM_INTERRUPT_REGISTER = 7,
-	CPWM_INTERRUPT_ENABLE = 8,
-	CPWM_EVENT_CONTROL_TIMER = 9,
-	CPWM_EVENT_REGISTER = 10
+	CPWM_CLK_CTRL			= 0,
+	CPWM_COUNTER_CTRL		= 1,
+	CPWM_COUNTER_VALUE		= 2,
+	CPWM_INTERVAL_COUNTER		= 3,
+	CPWM_MATCH_1_COUNTER		= 4,
+	CPWM_MATCH_2_COUNTER		= 5,
+	CPWM_MATCH_3_COUNTER		= 6,
+	CPWM_INTERRUPT_REGISTER		= 7,
+	CPWM_INTERRUPT_ENABLE		= 8,
+	CPWM_EVENT_CONTROL_TIMER	= 9,
+	CPWM_EVENT_REGISTER		= 10
+};
+
+static const char * cpwm_register_names[] = {
+	[CPWM_CLK_CTRL] 		= "CLK_CTRL",
+	[CPWM_COUNTER_CTRL] 		= "COUNTER_CTRL",
+	[CPWM_COUNTER_VALUE] 		= "COUNTER_VALUE",
+	[CPWM_INTERVAL_COUNTER] 	= "INTERVAL_COUNTER",
+	[CPWM_MATCH_1_COUNTER] 		= "MATCH_1_COUNTER",
+	[CPWM_MATCH_2_COUNTER] 		= "MATCH_2_COUNTER",
+	[CPWM_MATCH_3_COUNTER] 		= "MATCH_3_COUNTER",
+	[CPWM_INTERRUPT_REGISTER] 	= "INTERRUPT_REGISTER",
+	[CPWM_INTERRUPT_ENABLE]		= "INTERRUPT_ENABLE",
+	[CPWM_EVENT_CONTROL_TIMER]	= "EVENT_CONTROL_TIMER",
+	[CPWM_EVENT_REGISTER] 		= "EVENT_REGISTER",
 };
 
 #define CPWM_CLK_FALLING_EDGE 0x40
@@ -44,6 +59,14 @@ enum cpwm_register {
 #define CPWM_CLK_PRESCALE_SHIFT 1
 #define CPWM_CLK_PRESCALE_MASK (15 << 1)
 #define CPWM_CLK_PRESCALE_ENABLE 1
+
+#define CPWM_COUNTER_CTRL_WAVE_POL 0x40
+#define CPWM_COUNTER_CTRL_WAVE_DISABLE 0x20
+#define CPWM_COUNTER_CTRL_RESET 0x10
+#define CPWM_COUNTER_CTRL_MATCH_ENABLE 0x8
+#define CPWM_COUNTER_CTRL_DECREMENT_ENABLE 0x4
+#define CPWM_COUNTER_CTRL_INTERVAL_ENABLE 0x2
+#define CPWM_COUNTER_CTRL_COUNTING_DISABLE 0x1
 
 #define CPWM_NUM_PWM 3
 
@@ -61,6 +84,7 @@ struct cadence_pwm_pwm {
 
 struct cadence_pwm_chip {
 	struct pwm_chip chip;
+	uint32_t hwaddr;
 	char __iomem *base;
 	struct cadence_pwm_pwm pwms[CPWM_NUM_PWM];
 };
@@ -83,26 +107,30 @@ static uint32_t cpwm_read(struct cadence_pwm_chip *cpwm, int pwm,
 	uint32_t x;
 
 	x = ioread32(cpwm_register_address(cpwm, pwm, reg));
-	printk(KERN_DEBUG "Read %08x from %p:%d register %d\n", x, cpwm, pwm,
-		reg);
+	printk(KERN_DEBUG DRIVER_NAME ": read  %08x from %p:%d register %s\n",
+		x, cpwm, pwm, cpwm_register_names[reg]);
 	return x;
 }
 
 static void cpwm_write(struct cadence_pwm_chip *cpwm, int pwm,
 	enum cpwm_register reg, uint32_t value)
 {
-	printk(KERN_DEBUG "Write %08x to %p:%d register %d\n", value, cpwm, pwm,
-		reg);
+	printk(KERN_DEBUG DRIVER_NAME ": write %08x  to  %p:%d register %s\n",
+		value, cpwm, pwm, cpwm_register_names[reg]);
 	iowrite32(value, cpwm_register_address(cpwm, pwm, reg));
 }
+
+/* "If the waveform output mode is enabled, the waveform will change polarity
+ * when the count matches the value in the match 0 register." - [ttcps_v2_0]
+ */
 
 static int cadence_pwm_config(struct pwm_chip *chip,
 	struct pwm_device *pwm, int duty_ns, int period_ns)
 {
 	struct cadence_pwm_chip *cpwm = cadence_pwm_get(chip);
 	int h = pwm->hwpwm;
-	uint32_t x;
-	int period_clocks, prescaler;
+	uint32_t counter_ctrl, x;
+	int period_clocks, duty_clocks, prescaler;
 
 	printk(KERN_INFO DRIVER_NAME ": configuring %p/%s(%d), %d/%d ns\n",
 		cpwm, pwm->label, h, duty_ns, period_ns);
@@ -110,6 +138,15 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 	if (period_ns < 0)
 		return -EINVAL;
 
+	/* Make sure counter is stopped */
+	counter_ctrl = cpwm_read(cpwm, h, CPWM_COUNTER_CTRL);
+	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL,
+		counter_ctrl | CPWM_COUNTER_CTRL_COUNTING_DISABLE);
+
+	/* Reset counter */
+	cpwm_write(cpwm, h, CPWM_COUNTER_VALUE, 0);
+
+	/* Calculate period, prescaler and set clock control register */
 	period_clocks =
 		div64_u64(
 			((int64_t) period_ns * (int64_t) cpwm->pwms[h].clk_hz),
@@ -118,30 +155,69 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 	prescaler = ilog2(period_clocks) + 1 - 16;
 	if (prescaler < 0) prescaler = 0;
 
-	printk(KERN_INFO DRIVER_NAME ": %d clocks, prescaler 2^%d\n",
-		period_clocks, prescaler);
-
 	x = cpwm_read(cpwm, h, CPWM_CLK_CTRL);
 
-	x &= ~CPWM_CLK_PRESCALE_MASK;
-	x |= (prescaler << CPWM_CLK_PRESCALE_SHIFT) & CPWM_CLK_PRESCALE_MASK;
+	if (!prescaler)
+		x &= ~(CPWM_CLK_PRESCALE_ENABLE | CPWM_CLK_PRESCALE_MASK);
+	else
+		x |= CPWM_CLK_PRESCALE_ENABLE |
+			(((prescaler - 1) << CPWM_CLK_PRESCALE_SHIFT) &
+			CPWM_CLK_PRESCALE_MASK);
 
 	if (cpwm->pwms[h].source) x |= CPWM_CLK_SRC_EXTERNAL;
 	else x &= ~CPWM_CLK_SRC_EXTERNAL;
 
 	cpwm_write(cpwm, h, CPWM_CLK_CTRL, x);
 
+	/* Calculate interval and set counter control value */
+	duty_clocks =
+		div64_u64(
+			((int64_t) duty_ns * (int64_t) cpwm->pwms[h].clk_hz),
+			1000000000LL);
+
+	cpwm_write(cpwm, h, CPWM_INTERVAL_COUNTER,
+		(period_clocks >> prescaler) & 0xffff);
+	cpwm_write(cpwm, h, CPWM_MATCH_1_COUNTER,
+		(duty_clocks >> prescaler) & 0xffff);
+
+	/* Restore counter */
+	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL, counter_ctrl);
+
+	printk(KERN_INFO DRIVER_NAME ": %d/%d clocks, prescaler 2^%d\n",
+		duty_clocks, period_clocks, prescaler);
+
 	return 0;
 }
 
 static void cadence_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
+	struct cadence_pwm_chip *cpwm = cadence_pwm_get(chip);
+	int h = pwm->hwpwm;
+	uint32_t x;
+
 	printk(KERN_INFO DRIVER_NAME ": disabling %p\n", chip);
+
+	x = cpwm_read(cpwm, h, CPWM_COUNTER_CTRL);
+	x |= CPWM_COUNTER_CTRL_COUNTING_DISABLE |
+		CPWM_COUNTER_CTRL_WAVE_DISABLE;
+	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL, x);
 }
 
 static int cadence_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
+	struct cadence_pwm_chip *cpwm = cadence_pwm_get(chip);
+	int h = pwm->hwpwm;
+	uint32_t x;
+
 	printk(KERN_INFO DRIVER_NAME ": enabling %p\n", chip);
+
+	x = cpwm_read(cpwm, h, CPWM_COUNTER_CTRL);
+	x &= ~(CPWM_COUNTER_CTRL_COUNTING_DISABLE |
+		CPWM_COUNTER_CTRL_DECREMENT_ENABLE |
+		CPWM_COUNTER_CTRL_WAVE_DISABLE);
+	x |= CPWM_COUNTER_CTRL_INTERVAL_ENABLE | CPWM_COUNTER_CTRL_RESET |
+		CPWM_COUNTER_CTRL_MATCH_ENABLE | CPWM_COUNTER_CTRL_WAVE_POL;
+	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL, x);
 	return 0;
 }
 
