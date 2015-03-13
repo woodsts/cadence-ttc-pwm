@@ -1,27 +1,27 @@
 invoke=$(MAKE) M=$(PWD) -C @KERNEL_PATH@ \
 		ARCH=@KERNEL_ARCH@ \
 		CROSS_COMPILE=@KERNEL_CROSS_COMPILE@
-targets=mod_pwm-cadence.ko
+targets=mod_pwm_cadence.ko
 
 .PHONY: all
 all: $(targets)
 
-mod_pwm-cadence_SOURCES = pwm-cadence.c
+mod_pwm_cadence_SOURCES = pwm-cadence.c
 
-mod_pwm-cadence.ko: $(mod_pwm-cadence_SOURCES)
+mod_pwm_cadence.ko: $(mod_pwm_cadence_SOURCES)
 	$(invoke)
 
 .PHONY: install
-install: mod_pwm-cadence.ko
+install: mod_pwm_cadence.ko
 	install -d $(DESTDIR)/lib/modules/extra
-	install mod_pwm-cadence.ko $(DESTDIR)/lib/modules/extra/mod_pwm-cadence.ko
+	install mod_pwm_cadence.ko $(DESTDIR)/lib/modules/extra/mod_pwm_cadence.ko
 
 .PHONY: install-data
 install-data:
 
 .PHONY: distdir
 distdir:
-	-cp $(mod_pwm-cadence_SOURCES) $(distdir)
+	-cp $(mod_pwm_cadence_SOURCES) $(distdir)
 
 .PHONY: install-exec
 install-exec:
