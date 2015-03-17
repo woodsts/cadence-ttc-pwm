@@ -107,7 +107,8 @@ static uint32_t cpwm_read(struct cadence_pwm_chip *cpwm, int pwm,
 	uint32_t x;
 
 	x = ioread32(cpwm_register_address(cpwm, pwm, reg));
-	printk(KERN_DEBUG DRIVER_NAME ": read  %08x from %p:%d register %s\n",
+	dev_dbg(cpwm->chip.dev,
+                "read  %08x from %p:%d register %s",
 		x, cpwm, pwm, cpwm_register_names[reg]);
 	return x;
 }
@@ -115,7 +116,8 @@ static uint32_t cpwm_read(struct cadence_pwm_chip *cpwm, int pwm,
 static void cpwm_write(struct cadence_pwm_chip *cpwm, int pwm,
 	enum cpwm_register reg, uint32_t value)
 {
-	printk(KERN_DEBUG DRIVER_NAME ": write %08x  to  %p:%d register %s\n",
+	dev_dbg(cpwm->chip.dev,
+                "write %08x  to  %p:%d register %s",
 		value, cpwm, pwm, cpwm_register_names[reg]);
 	iowrite32(value, cpwm_register_address(cpwm, pwm, reg));
 }
@@ -132,7 +134,7 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 	uint32_t counter_ctrl, x;
 	int period_clocks, duty_clocks, prescaler;
 
-	printk(KERN_INFO DRIVER_NAME ": configuring %p/%s(%d), %d/%d ns\n",
+	dev_dbg(chip->dev, "configuring %p/%s(%d), %d/%d ns",
 		cpwm, pwm->label, h, duty_ns, period_ns);
 
 	if (period_ns < 0)
@@ -189,8 +191,9 @@ static int cadence_pwm_config(struct pwm_chip *chip,
 		CPWM_COUNTER_CTRL_WAVE_POL;
 	cpwm_write(cpwm, h, CPWM_COUNTER_CTRL, counter_ctrl);
 
-	printk(KERN_INFO DRIVER_NAME ": %d/%d clocks, prescaler 2^%d\n",
-		duty_clocks, period_clocks, prescaler);
+	dev_dbg(chip->dev,
+                "%d/%d clocks, prescaler 2^%d", duty_clocks, period_clocks,
+                prescaler);
 
 	return 0;
 }
@@ -201,7 +204,7 @@ static void cadence_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	int h = pwm->hwpwm;
 	uint32_t x;
 
-	printk(KERN_INFO DRIVER_NAME ": disabling %p\n", chip);
+	dev_dbg(chip->dev, "Disabling");
 
 	x = cpwm_read(cpwm, h, CPWM_COUNTER_CTRL);
 	x |= CPWM_COUNTER_CTRL_COUNTING_DISABLE |
@@ -215,7 +218,7 @@ static int cadence_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 	int h = pwm->hwpwm;
 	uint32_t x;
 
-	printk(KERN_INFO DRIVER_NAME ": enabling %p\n", chip);
+	dev_dbg(chip->dev, "enabling");
 
 	x = cpwm_read(cpwm, h, CPWM_COUNTER_CTRL);
 	x &= ~(CPWM_COUNTER_CTRL_COUNTING_DISABLE |
