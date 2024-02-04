@@ -254,7 +254,6 @@ static int cadence_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 static const struct pwm_ops cadence_pwm_ops = {
 	.apply = cadence_pwm_apply,
-	.owner = THIS_MODULE,
 };
 
 static int cadence_pwm_probe(struct platform_device *pdev)
@@ -346,7 +345,6 @@ MODULE_DEVICE_TABLE(of, cadence_pwm_of_match);
 static struct platform_driver cadence_pwm_driver = {
 	.driver = {
 		.name = "pwm-cadence",
-		.owner = THIS_MODULE,
 		.of_match_table = cadence_pwm_of_match,
 	},
 	.probe = cadence_pwm_probe,
