@@ -18,8 +18,8 @@
 #include <linux/module.h>
 #include <linux/io.h>
 #include <linux/pwm.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
+#include <linux/platform_device.h>
 #include <asm/div64.h>
 
 #define DRIVER_NAME "pwm-cadence"
@@ -309,7 +309,6 @@ static int cadence_pwm_probe(struct platform_device *pdev)
 	cpwm->chip.dev = &pdev->dev;
 	cpwm->chip.ops = &cadence_pwm_ops;
 	cpwm->chip.npwm = CPWM_NUM_PWM;
-	cpwm->chip.base = -1;
 
 	ret = pwmchip_add(&cpwm->chip);
 	if (ret < 0) {
